@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
@@ -206,6 +207,305 @@ class _ChatScreenState extends State<ChatScreen> {
     });
     _saveChatSessions();
   }
+  // ─── SHARE OPTIONS ────────────────────────────────────────
+void _showShareOptions(BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: CyberColors.surfaceAlt,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+    builder: (context) {
+      return Container(
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(color: CyberColors.primary.withOpacity(0.4)),
+          ),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Container(width: 16, height: 1, color: CyberColors.primary),
+                const SizedBox(width: 8),
+                const Text(
+                  "SHARE_OPTIONS",
+                  style: TextStyle(
+                    color: CyberColors.primary,
+                    fontSize: 10,
+                    fontFamily: 'monospace',
+                    letterSpacing: 3,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Container(
+                    height: 1,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          CyberColors.primary.withOpacity(0.5),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Share as Text
+            _shareOptionTile(
+              icon: Icons.chat_outlined,
+              label: "SHARE_AS_TEXT",
+              sublabel: "Send via WhatsApp, Telegram, etc.",
+              color: CyberColors.primary,
+              onTap: () {
+                Navigator.pop(context);
+                _shareAsText();
+              },
+            ),
+            const SizedBox(height: 12),
+
+            // Share as PDF
+            _shareOptionTile(
+              icon: Icons.picture_as_pdf_outlined,
+              label: "SHARE_AS_PDF",
+              sublabel: "Export full chat as PDF file",
+              color: CyberColors.accent,
+              onTap: () {
+                Navigator.pop(context);
+                _shareAsPdf();
+              },
+            ),
+            const SizedBox(height: 12),
+
+            // Copy to clipboard
+            _shareOptionTile(
+              icon: Icons.copy_outlined,
+              label: "COPY_TO_CLIPBOARD",
+              sublabel: "Copy all messages as text",
+              color: CyberColors.yellow,
+              onTap: () {
+                Navigator.pop(context);
+                _copyToClipboard();
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+Widget _shareOptionTile({
+  required IconData icon,
+  required String label,
+  required String sublabel,
+  required Color color,
+  required VoidCallback onTap,
+}) {
+  return GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.05),
+        border: Border(
+          left: BorderSide(color: color, width: 2),
+          top: BorderSide(color: color.withOpacity(0.2)),
+          bottom: BorderSide(color: color.withOpacity(0.1)),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 14),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 2,
+                ),
+              ),
+              Text(
+                sublabel,
+                style: const TextStyle(
+                  color: CyberColors.textDim,
+                  fontSize: 10,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          Icon(Icons.double_arrow_rounded, color: color.withOpacity(0.5), size: 16),
+        ],
+      ),
+    ),
+  );
+}
+
+// ─── SHARE AS TEXT ───────────────────────────────────────
+void _shareAsText() {
+  final StringBuffer buffer = StringBuffer();
+  buffer.writeln("=== MENTORA AI CHAT ===\n");
+  for (final msg in _messages) {
+    final role = msg["role"] == "user" ? "YOU" : "MENTORA";
+    buffer.writeln("[$role]");
+    buffer.writeln(msg["content"]);
+    if (msg["image"] != null) {
+      buffer.writeln("[IMAGE GENERATED]");
+    }
+    buffer.writeln();
+  }
+  buffer.writeln("--- Shared from MENTORA AI ---");
+  Share.share(buffer.toString(), subject: "MENTORA AI Chat");
+}
+
+// ─── COPY TO CLIPBOARD ───────────────────────────────────
+void _copyToClipboard() {
+  final StringBuffer buffer = StringBuffer();
+  buffer.writeln("=== MENTORA AI CHAT ===\n");
+  for (final msg in _messages) {
+    final role = msg["role"] == "user" ? "YOU" : "MENTORA";
+    buffer.writeln("[$role]: ${msg["content"]}");
+    if (msg["image"] != null) {
+      buffer.writeln("[IMAGE GENERATED]");
+    }
+    buffer.writeln();
+  }
+  Clipboard.setData(ClipboardData(text: buffer.toString()));
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: const Text(
+        "CHAT COPIED TO CLIPBOARD",
+        style: TextStyle(
+          fontFamily: 'monospace',
+          letterSpacing: 2,
+          fontSize: 11,
+        ),
+      ),
+      backgroundColor: CyberColors.yellow,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 2),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+    ),
+  );
+}
+
+// ─── SHARE AS PDF ────────────────────────────────────────
+Future<void> _shareAsPdf() async {
+  try {
+    final pdf = pw.Document();
+    final List<pw.Widget> content = [];
+
+    // Title
+    content.add(
+      pw.Text(
+        "MENTORA AI CHAT",
+        style: pw.TextStyle(
+          fontSize: 24,
+          fontWeight: pw.FontWeight.bold,
+        ),
+      ),
+    );
+    content.add(pw.SizedBox(height: 8));
+    content.add(
+      pw.Text(
+        "Generated on ${DateTime.now().toString().substring(0, 16)}",
+        style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey),
+      ),
+    );
+    content.add(pw.Divider());
+    content.add(pw.SizedBox(height: 16));
+
+    // Messages
+    for (final msg in _messages) {
+      final isUser = msg["role"] == "user";
+      content.add(
+        pw.Container(
+          padding: const pw.EdgeInsets.all(10),
+          margin: const pw.EdgeInsets.only(bottom: 12),
+          decoration: pw.BoxDecoration(
+            border: pw.Border(
+              left: pw.BorderSide(
+                color: isUser ? PdfColors.pink : PdfColors.cyan,
+                width: 3,
+              ),
+            ),
+            color: isUser
+                ? PdfColors.pink50
+                : PdfColors.cyan50,
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                isUser ? "YOU" : "MENTORA AI",
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 10,
+                  color: isUser ? PdfColors.pink : PdfColors.cyan,
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                msg["content"]!,
+                style: const pw.TextStyle(fontSize: 11),
+              ),
+              if (msg["image"] != null)
+                pw.Padding(
+                  padding: const pw.EdgeInsets.only(top: 8),
+                  child: pw.Text(
+                    "[Image generated - view in app]",
+                    style: const pw.TextStyle(
+                      fontSize: 10,
+                      color: PdfColors.grey,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build: (context) => content,
+      ),
+    );
+
+    // Save and share
+    final output = await getTemporaryDirectory();
+    final file = File("${output.path}/mentora_chat.pdf");
+    await file.writeAsBytes(await pdf.save());
+    await Share.shareXFiles(
+      [XFile(file.path)],
+      subject: "MENTORA AI Chat",
+    );
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("PDF Error: $e"),
+        backgroundColor: CyberColors.secondary,
+      ),
+    );
+  }
+}
 
   String _formatDate(DateTime date) {
     final now = DateTime.now();
@@ -737,14 +1037,35 @@ class _ChatScreenState extends State<ChatScreen> {
                 ],
               ),
               const Spacer(),
-              GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _messages = [];
-                    _conversationHistory = [];
-                    _currentSessionId = null;
-                  });
-                },
+             // Share button
+if (_messages.isNotEmpty)
+  GestureDetector(
+    onTap: () => _showShareOptions(context),
+    child: Container(
+      width: 36,
+      height: 36,
+      margin: const EdgeInsets.only(right: 8),
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: CyberColors.secondary.withOpacity(0.5),
+        ),
+        color: CyberColors.secondary.withOpacity(0.05),
+      ),
+      child: const Icon(
+        Icons.share,
+        color: CyberColors.secondary,
+        size: 16,
+      ),
+    ),
+  ),
+GestureDetector(
+  onTap: () {
+    setState(() {
+      _messages = [];
+      _conversationHistory = [];
+      _currentSessionId = null;
+    });
+  },
                 child: Container(
                   width: 36,
                   height: 36,
