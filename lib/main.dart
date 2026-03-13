@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:typed_data';
 
 void main() {
   runApp(const MyApp());
@@ -239,8 +240,24 @@ class _ChatScreenState extends State<ChatScreen> {
       ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final reply = data["reply"];
+  final data = jsonDecode(response.body);
+  final reply = data["reply"];
+  final imageBase64 = data["image_base64"];
+
+  // If image was generated show it
+  if (imageBase64 != null) {
+    _stopTypingAnimation();
+    setState(() {
+      _messages.add({
+        "role": "assistant",
+        "content": reply,
+        "image": imageBase64
+      });
+      _isLoading = false;
+    });
+    _saveCurrentSession();
+    return;
+  }
         _conversationHistory = List<Map<String, String>>.from(
           data["conversation_history"].map((e) => Map<String, String>.from(e)),
         );
@@ -1171,15 +1188,30 @@ class MessageBubble extends StatelessWidget {
                           color: accent.withOpacity(0.1), width: 1),
                     ),
                   ),
-                  child: Text(
-                    msg["content"]!,
-                    style: const TextStyle(
-                      color: CyberColors.textMain,
-                      fontSize: 13,
-                      height: 1.6,
-                      fontFamily: 'monospace',
-                    ),
-                  ),
+                  child: Column(
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
+    Text(
+      msg["content"]!,
+      style: const TextStyle(
+        color: CyberColors.textMain,
+        fontSize: 13,
+        height: 1.6,
+        fontFamily: 'monospace',
+      ),
+    ),
+    if (msg["image"] != null) ...[
+      const SizedBox(height: 10),
+      ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.memory(
+          base64Decode(msg["image"]!),
+          fit: BoxFit.cover,
+        ),
+      ),
+    ],
+  ],
+),
                 ),
               ),
               Positioned(
