@@ -1,8 +1,8 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'dart:async';
+import 'dart:typed_data';
 import 'dart:math' as math;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -237,41 +237,38 @@ class _ChatScreenState extends State<ChatScreen> {
           "message": message,
           "conversation_history": _conversationHistory,
         }),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 60));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final reply = data["reply"];
-final imageBase64 = data["image_base64"];
-        final imageBase64 = data["image_base64"];
+        final String reply = data["reply"];
+        final String? imageBase64 = data["image_base64"];
 
-        // If image was generated show it
-        if (imageBase64 != null) {
-          _stopTypingAnimation();
-          setState(() {
-            _messages.add({
-              "role": "assistant",
-              "content": reply,
-              "image": imageBase64
-            });
-            _isLoading = false;
-          });
-          _saveCurrentSession();
-          return;
-        }
         _conversationHistory = List<Map<String, String>>.from(
           data["conversation_history"].map((e) => Map<String, String>.from(e)),
         );
+
         setState(() {
-          _messages.add({"role": "assistant", "content": reply});
+          if (imageBase64 != null && imageBase64.isNotEmpty) {
+            _messages.add({
+              "role": "assistant",
+              "content": reply,
+              "image": imageBase64,
+            });
+          } else {
+            _messages.add({
+              "role": "assistant",
+              "content": reply,
+            });
+          }
           _isLoading = false;
         });
         _saveCurrentSession();
       } else {
-        _handleError("[SYSTEM_ERROR] :: UPLINK_FAILURE");
+        _handleError("SYSTEM_ERROR :: UPLINK_FAILURE");
       }
     } catch (e) {
-      _handleError("[TIMEOUT] :: RECONNECTING_TO_GRID...");
+      _handleError("TIMEOUT :: RECONNECTING_TO_GRID...");
     }
 
     _scrollToBottom();
@@ -279,17 +276,9 @@ final imageBase64 = data["image_base64"];
 
   void _handleError(String msg) {
     setState(() {
-  if (imageBase64 != null) {
-    _messages.add({
-      "role": "assistant",
-      "content": reply,
-      "image": imageBase64,
+      _messages.add({"role": "assistant", "content": msg});
+      _isLoading = false;
     });
-  } else {
-    _messages.add({"role": "assistant", "content": reply});
-  }
-  _isLoading = false;
-});
   }
 
   void _scrollToBottom({bool immediate = false}) {
@@ -314,7 +303,6 @@ final imageBase64 = data["image_base64"];
       backgroundColor: CyberColors.bg,
       child: Column(
         children: [
-          // Drawer Header
           Container(
             padding: const EdgeInsets.fromLTRB(20, 52, 20, 16),
             decoration: BoxDecoration(
@@ -398,8 +386,6 @@ final imageBase64 = data["image_base64"];
                   ],
                 ),
                 const SizedBox(height: 14),
-
-                // New Chat Button
                 GestureDetector(
                   onTap: _startNewChat,
                   child: Container(
@@ -438,16 +424,11 @@ final imageBase64 = data["image_base64"];
             ),
           ),
 
-          // Recent Label
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
             child: Row(
               children: [
-                Container(
-                  width: 16,
-                  height: 1,
-                  color: CyberColors.accent,
-                ),
+                Container(width: 16, height: 1, color: CyberColors.accent),
                 const SizedBox(width: 8),
                 const Text(
                   "RECENT_SESSIONS",
@@ -477,136 +458,114 @@ final imageBase64 = data["image_base64"];
             ),
           ),
 
-          // Sessions List
           Expanded(
             child: _chatSessions.isEmpty
                 ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.storage_outlined,
-                    color: CyberColors.textDim,
-                    size: 36,
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    "NO_SESSIONS_FOUND",
-                    style: TextStyle(
-                      color: CyberColors.textDim,
-                      fontSize: 10,
-                      fontFamily: 'monospace',
-                      letterSpacing: 2,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    "START A NEW SESSION",
-                    style: TextStyle(
-                      color: CyberColors.textDim,
-                      fontSize: 9,
-                      fontFamily: 'monospace',
-                      letterSpacing: 2,
-                    ),
-                  ),
-                ],
-              ),
-            )
-                : ListView.builder(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 4),
-              itemCount: _chatSessions.length,
-              itemBuilder: (context, index) {
-                final session = _chatSessions[index];
-                final isActive = session.id == _currentSessionId;
-                return GestureDetector(
-                  onTap: () => _loadSession(session),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: isActive
-                          ? CyberColors.primary.withOpacity(0.08)
-                          : CyberColors.surfaceAlt,
-                      border: Border(
-                        left: BorderSide(
-                          color: isActive
-                              ? CyberColors.primary
-                              : CyberColors.accent.withOpacity(0.3),
-                          width: 2,
-                        ),
-                        top: BorderSide(
-                          color: isActive
-                              ? CyberColors.primary.withOpacity(0.2)
-                              : Colors.transparent,
-                        ),
-                      ),
-                    ),
-                    child: Row(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                session.title.toUpperCase(),
-                                style: TextStyle(
-                                  color: isActive
-                                      ? CyberColors.primary
-                                      : CyberColors.textMain,
-                                  fontSize: 11,
-                                  fontFamily: 'monospace',
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                        Icon(Icons.storage_outlined,
+                            color: CyberColors.textDim, size: 36),
+                        const SizedBox(height: 10),
+                        const Text(
+                          "NO_SESSIONS_FOUND",
+                          style: TextStyle(
+                            color: CyberColors.textDim,
+                            fontSize: 10,
+                            fontFamily: 'monospace',
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    itemCount: _chatSessions.length,
+                    itemBuilder: (context, index) {
+                      final session = _chatSessions[index];
+                      final isActive = session.id == _currentSessionId;
+                      return GestureDetector(
+                        onTap: () => _loadSession(session),
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: isActive
+                                ? CyberColors.primary.withOpacity(0.08)
+                                : CyberColors.surfaceAlt,
+                            border: Border(
+                              left: BorderSide(
+                                color: isActive
+                                    ? CyberColors.primary
+                                    : CyberColors.accent.withOpacity(0.3),
+                                width: 2,
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _formatDate(session.createdAt),
-                                style: const TextStyle(
-                                  color: CyberColors.textDim,
-                                  fontSize: 9,
-                                  fontFamily: 'monospace',
-                                  letterSpacing: 2,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      session.title.toUpperCase(),
+                                      style: TextStyle(
+                                        color: isActive
+                                            ? CyberColors.primary
+                                            : CyberColors.textMain,
+                                        fontSize: 11,
+                                        fontFamily: 'monospace',
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _formatDate(session.createdAt),
+                                      style: const TextStyle(
+                                        color: CyberColors.textDim,
+                                        fontSize: 9,
+                                        fontFamily: 'monospace',
+                                        letterSpacing: 2,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () => _deleteSession(session.id),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(
+                                      color:
+                                          CyberColors.secondary.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.delete_outline,
+                                    color: CyberColors.secondary,
+                                    size: 14,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        GestureDetector(
-                          onTap: () => _deleteSession(session.id),
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: CyberColors.secondary.withOpacity(0.3),
-                              ),
-                            ),
-                            child: const Icon(
-                              Icons.delete_outline,
-                              color: CyberColors.secondary,
-                              size: 14,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
 
-          // Drawer Footer
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               border: Border(
-                top: BorderSide(
-                  color: CyberColors.primary.withOpacity(0.2),
-                ),
+                top: BorderSide(color: CyberColors.primary.withOpacity(0.2)),
               ),
             ),
             child: Row(
@@ -622,7 +581,7 @@ final imageBase64 = data["image_base64"];
                   ),
                 ),
                 const _BlinkingText(
-                  text: "◈ MEMORY_ACTIVE",
+                  text: "MEMORY_ACTIVE",
                   color: CyberColors.accent,
                 ),
               ],
@@ -645,25 +604,24 @@ final imageBase64 = data["image_base64"];
           const Positioned.fill(child: CornerAccents()),
           Column(
             children: [
-              // Header with menu button
               _buildHeader(),
               Expanded(
                 child: _messages.isEmpty
                     ? const EmptyState()
                     : ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.all(20),
-                  itemCount: _messages.length + (_isLoading ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (_isLoading && index == _messages.length) {
-                      return const CyberLoader();
-                    }
-                    return MessageBubble(
-                      msg: _messages[index],
-                      index: index,
-                    );
-                  },
-                ),
+                        controller: _scrollController,
+                        padding: const EdgeInsets.all(20),
+                        itemCount: _messages.length + (_isLoading ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (_isLoading && index == _messages.length) {
+                            return const CyberLoader();
+                          }
+                          return MessageBubble(
+                            msg: _messages[index],
+                            index: index,
+                          );
+                        },
+                      ),
               ),
               _buildInputArea(),
             ],
@@ -673,7 +631,6 @@ final imageBase64 = data["image_base64"];
     );
   }
 
-  // ─── HEADER WITH MENU ────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       decoration: BoxDecoration(
@@ -692,7 +649,6 @@ final imageBase64 = data["image_base64"];
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Row(
             children: [
-              // Menu Button
               GestureDetector(
                 onTap: () => _scaffoldKey.currentState?.openDrawer(),
                 child: Container(
@@ -701,19 +657,13 @@ final imageBase64 = data["image_base64"];
                   margin: const EdgeInsets.only(right: 12),
                   decoration: BoxDecoration(
                     border: Border.all(
-                      color: CyberColors.primary.withOpacity(0.5),
-                    ),
+                        color: CyberColors.primary.withOpacity(0.5)),
                     color: CyberColors.primary.withOpacity(0.05),
                   ),
-                  child: const Icon(
-                    Icons.menu,
-                    color: CyberColors.primary,
-                    size: 18,
-                  ),
+                  child: const Icon(Icons.menu,
+                      color: CyberColors.primary, size: 18),
                 ),
               ),
-
-              // Logo box
               Container(
                 width: 44,
                 height: 44,
@@ -721,14 +671,8 @@ final imageBase64 = data["image_base64"];
                   border: Border.all(color: CyberColors.primary, width: 2),
                   boxShadow: [
                     BoxShadow(
-                      color: CyberColors.primary.withOpacity(0.3),
-                      blurRadius: 16,
-                    ),
-                    BoxShadow(
-                      color: CyberColors.primary.withOpacity(0.1),
-                      blurRadius: 6,
-                      spreadRadius: 2,
-                    ),
+                        color: CyberColors.primary.withOpacity(0.3),
+                        blurRadius: 16),
                   ],
                 ),
                 child: Stack(
@@ -741,9 +685,8 @@ final imageBase64 = data["image_base64"];
                         height: 26,
                         decoration: BoxDecoration(
                           border: Border.all(
-                            color: CyberColors.primary.withOpacity(0.4),
-                            width: 1,
-                          ),
+                              color: CyberColors.primary.withOpacity(0.4),
+                              width: 1),
                         ),
                       ),
                     ),
@@ -760,8 +703,6 @@ final imageBase64 = data["image_base64"];
                 ),
               ),
               const SizedBox(width: 14),
-
-              // Title
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -785,7 +726,7 @@ final imageBase64 = data["image_base64"];
                         if (i < 2)
                           Container(
                             margin:
-                            const EdgeInsets.symmetric(horizontal: 6),
+                                const EdgeInsets.symmetric(horizontal: 6),
                             width: 1,
                             height: 8,
                             color: CyberColors.textDim.withOpacity(0.4),
@@ -796,8 +737,6 @@ final imageBase64 = data["image_base64"];
                 ],
               ),
               const Spacer(),
-
-              // New chat icon
               GestureDetector(
                 onTap: () {
                   setState(() {
@@ -811,24 +750,17 @@ final imageBase64 = data["image_base64"];
                   height: 36,
                   decoration: BoxDecoration(
                     border: Border.all(
-                      color: CyberColors.accent.withOpacity(0.5),
-                    ),
+                        color: CyberColors.accent.withOpacity(0.5)),
                     color: CyberColors.accent.withOpacity(0.05),
                   ),
-                  child: const Icon(
-                    Icons.add,
-                    color: CyberColors.accent,
-                    size: 16,
-                  ),
+                  child: const Icon(Icons.add,
+                      color: CyberColors.accent, size: 16),
                 ),
               ),
-
               const SizedBox(width: 8),
-
-              // Status pills
-              Wrap(
+              const Wrap(
                 spacing: 6,
-                children: const [
+                children: [
                   StatusPill(
                       label: "UPLINK",
                       color: CyberColors.primary,
@@ -849,10 +781,7 @@ final imageBase64 = data["image_base64"];
         gradient: LinearGradient(
           begin: Alignment.bottomCenter,
           end: Alignment.topCenter,
-          colors: [
-            CyberColors.surfaceAlt,
-            CyberColors.bg.withOpacity(0),
-          ],
+          colors: [CyberColors.surfaceAlt, CyberColors.bg.withOpacity(0)],
         ),
         border: Border(
           top: BorderSide(
@@ -906,12 +835,12 @@ final imageBase64 = data["image_base64"];
           Row(
             children: [
               Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 12),
                 decoration: BoxDecoration(
                   color: CyberColors.primary.withOpacity(0.1),
-                  border:
-                  Border.all(color: CyberColors.primary.withOpacity(0.4)),
+                  border: Border.all(
+                      color: CyberColors.primary.withOpacity(0.4)),
                 ),
                 child: const Text(
                   "ROOT@MENTORA:~\$",
@@ -938,10 +867,10 @@ final imageBase64 = data["image_base64"];
                     ),
                     boxShadow: _inputFocused
                         ? [
-                      BoxShadow(
-                          color: CyberColors.primary.withOpacity(0.2),
-                          blurRadius: 14)
-                    ]
+                            BoxShadow(
+                                color: CyberColors.primary.withOpacity(0.2),
+                                blurRadius: 14)
+                          ]
                         : [],
                   ),
                   child: TextField(
@@ -954,10 +883,10 @@ final imageBase64 = data["image_base64"];
                     ),
                     cursorColor: CyberColors.primary,
                     decoration: const InputDecoration(
-                      hintText: ">> TYPE_COMMAND...",
+                      hintText: ">> TYPE_COMMAND... (use /image to generate images)",
                       hintStyle: TextStyle(
                         color: CyberColors.textDim,
-                        fontSize: 12,
+                        fontSize: 11,
                         fontFamily: 'monospace',
                       ),
                       border: InputBorder.none,
@@ -987,10 +916,10 @@ final imageBase64 = data["image_base64"];
                     boxShadow: _isLoading
                         ? []
                         : [
-                      BoxShadow(
-                          color: CyberColors.primary.withOpacity(0.35),
-                          blurRadius: 12)
-                    ],
+                            BoxShadow(
+                                color: CyberColors.primary.withOpacity(0.35),
+                                blurRadius: 12)
+                          ],
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -1049,7 +978,7 @@ final imageBase64 = data["image_base64"];
               ),
               const Spacer(),
               const _BlinkingText(
-                text: "◈ SECURE_CHANNEL_ACTIVE",
+                text: "SECURE_CHANNEL_ACTIVE",
                 color: CyberColors.accent,
               ),
             ],
@@ -1058,8 +987,6 @@ final imageBase64 = data["image_base64"];
       ),
     );
   }
-
-  void _stopTypingAnimation() {}
 }
 
 // ─── STATUS PILL ─────────────────────────────────────────────────
@@ -1089,14 +1016,14 @@ class StatusPill extends StatelessWidget {
           blink
               ? _BlinkingDot(color: color)
               : Container(
-            width: 5,
-            height: 5,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: color, blurRadius: 4)],
-            ),
-          ),
+                  width: 5,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                    boxShadow: [BoxShadow(color: color, blurRadius: 4)],
+                  ),
+                ),
           const SizedBox(width: 5),
           Text(
             label,
@@ -1124,14 +1051,13 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isUser = msg["role"] == "user";
-    final Color accent =
-    isUser ? CyberColors.secondary : CyberColors.primary;
+    final Color accent = isUser ? CyberColors.secondary : CyberColors.primary;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
       child: Column(
         crossAxisAlignment:
-        isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -1157,7 +1083,7 @@ class MessageBubble extends StatelessWidget {
                   ),
                 ),
               Text(
-                isUser ? "▶ USER_INPUT" : "◀ MENTORA.OS",
+                isUser ? "USER_INPUT" : "MENTORA.OS",
                 style: TextStyle(
                   color: accent,
                   fontSize: 9,
@@ -1211,10 +1137,22 @@ class MessageBubble extends StatelessWidget {
                           fontFamily: 'monospace',
                         ),
                       ),
-                      if (msg["image"] != null) ...[
-                        const SizedBox(height: 10),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
+                      // Show image if present
+                      if (msg["image"] != null && msg["image"]!.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: CyberColors.primary,
+                              width: 1,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: CyberColors.primary.withOpacity(0.3),
+                                blurRadius: 12,
+                              ),
+                            ],
+                          ),
                           child: Image.memory(
                             base64Decode(msg["image"]!),
                             fit: BoxFit.cover,
@@ -1225,8 +1163,7 @@ class MessageBubble extends StatelessWidget {
                   ),
                 ),
               ),
-              Positioned(
-                  top: 0, left: 0, child: _Corner(color: accent)),
+              Positioned(top: 0, left: 0, child: _Corner(color: accent)),
               Positioned(
                   top: 0,
                   right: 0,
@@ -1246,8 +1183,7 @@ class MessageBubble extends StatelessWidget {
               padding: const EdgeInsets.only(top: 5),
               child: GestureDetector(
                 onTap: () {
-                  Clipboard.setData(
-                      ClipboardData(text: msg["content"]!));
+                  Clipboard.setData(ClipboardData(text: msg["content"]!));
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: const Text(
@@ -1279,7 +1215,7 @@ class MessageBubble extends StatelessWidget {
                           size: 10, color: CyberColors.textDim),
                       SizedBox(width: 4),
                       Text(
-                        "⧉ COPY_DATA",
+                        "COPY_DATA",
                         style: TextStyle(
                           color: CyberColors.textDim,
                           fontSize: 8,
@@ -1389,7 +1325,7 @@ class _CyberLoaderState extends State<CyberLoader>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            "◀ MENTORA.OS",
+            "MENTORA.OS",
             style: TextStyle(
               color: CyberColors.primary,
               fontSize: 9,
@@ -1401,7 +1337,7 @@ class _CyberLoaderState extends State<CyberLoader>
           const SizedBox(height: 5),
           Container(
             padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               border: const Border(
                 left: BorderSide(color: CyberColors.primary, width: 2),
@@ -1440,8 +1376,7 @@ class _CyberLoaderState extends State<CyberLoader>
                     animation: _letterControllers[i],
                     builder: (_, __) {
                       return Opacity(
-                        opacity:
-                        0.3 + (_letterControllers[i].value * 0.7),
+                        opacity: 0.3 + (_letterControllers[i].value * 0.7),
                         child: Text(
                           _text[i],
                           style: const TextStyle(
@@ -1458,9 +1393,7 @@ class _CyberLoaderState extends State<CyberLoader>
                 }),
                 const SizedBox(width: 4),
                 const _BlinkingText(
-                    text: "▮",
-                    color: CyberColors.accent,
-                    fontSize: 11),
+                    text: "...", color: CyberColors.accent, fontSize: 11),
               ],
             ),
           ),
@@ -1529,6 +1462,16 @@ class EmptyState extends StatelessWidget {
               fontFamily: 'monospace',
             ),
           ),
+          const SizedBox(height: 12),
+          Text(
+            "TIP: Use /image to generate images",
+            style: TextStyle(
+              color: CyberColors.accent.withOpacity(0.6),
+              fontSize: 10,
+              letterSpacing: 2,
+              fontFamily: 'monospace',
+            ),
+          ),
           const SizedBox(height: 20),
           const Row(
             mainAxisSize: MainAxisSize.min,
@@ -1539,7 +1482,7 @@ class EmptyState extends StatelessWidget {
                   blink: true),
               SizedBox(width: 8),
               StatusPill(
-                  label: "NEURAL_LINK_READY",
+                  label: "IMAGE_GEN_READY",
                   color: CyberColors.accent),
             ],
           ),
@@ -1578,16 +1521,15 @@ class _GlitchTextState extends State<_GlitchText>
 
   void _scheduleGlitch() {
     _glitchTimer =
-        Timer(Duration(milliseconds: 3000 + math.Random().nextInt(4000)),
-                () {
-              if (!mounted) return;
-              setState(() => _showGlitch = true);
-              Timer(const Duration(milliseconds: 150), () {
-                if (!mounted) return;
-                setState(() => _showGlitch = false);
-                _scheduleGlitch();
-              });
-            });
+        Timer(Duration(milliseconds: 3000 + math.Random().nextInt(4000)), () {
+      if (!mounted) return;
+      setState(() => _showGlitch = true);
+      Timer(const Duration(milliseconds: 150), () {
+        if (!mounted) return;
+        setState(() => _showGlitch = false);
+        _scheduleGlitch();
+      });
+    });
   }
 
   @override
@@ -1611,11 +1553,9 @@ class _GlitchTextState extends State<_GlitchText>
             letterSpacing: 6,
             shadows: [
               Shadow(
-                  color: CyberColors.primary.withOpacity(0.8),
-                  blurRadius: 12),
+                  color: CyberColors.primary.withOpacity(0.8), blurRadius: 12),
               Shadow(
-                  color: CyberColors.primary.withOpacity(0.4),
-                  blurRadius: 24),
+                  color: CyberColors.primary.withOpacity(0.4), blurRadius: 24),
             ],
           ),
         ),
@@ -1754,7 +1694,6 @@ class _GridPainter extends CustomPainter {
     final paint = Paint()
       ..color = CyberColors.primary.withOpacity(0.03)
       ..strokeWidth = 1;
-
     for (double x = 0; x < size.width; x += 40) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
     }
@@ -1834,7 +1773,6 @@ class _CornerAccentPainter extends CustomPainter {
         ..strokeWidth = 2
         ..style = PaintingStyle.stroke,
     );
-
     canvas.drawLine(
         Offset(size.width - 80, 0), Offset(size.width, 0), pinkPaint);
     canvas.drawLine(
